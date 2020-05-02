@@ -1,4 +1,5 @@
 *.py[cod]
+test.py
 
 # C extensions
 *.so
@@ -39,6 +40,7 @@ nosetests.xml
 
 # IDE config
 .idea/
+.vscode/
 
 # Notebooks checkpoints
 examples/.ipynb_checkpoints/
