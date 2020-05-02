@@ -85,7 +85,7 @@ def asymptotic_decay(learning_rate, t, max_iter):
 
 
 class MiniSom(object):
-    def __init__(self, x, y, input_len, sigma=1.0, learning_rate=0.5,
+    def __init__(self, x, y, input_len, output_len=0, sigma=1.0, learning_rate=0.5,
                  decay_function=asymptotic_decay,
                  neighborhood_function='gaussian', topology='rectangular',
                  activation_distance='euclidean', random_seed=None):
@@ -108,6 +108,9 @@ class MiniSom(object):
 
         input_len : int
             Number of the elements of the vectors in input.
+
+        output_len : int, optional (default=0)
+            Number of the elements of the vectors in output.
 
         sigma : float, optional (default=1.0)
             Spread of the neighborhood function, needs to be adequate
@@ -158,8 +161,9 @@ class MiniSom(object):
         self._learning_rate = learning_rate
         self._sigma = sigma
         self._input_len = input_len
+        self._output_len = output_len
         # random initialization
-        self._weights = self._random_generator.rand(x, y, input_len)*2-1
+        self._weights = self._random_generator.rand(x, y, input_len + output_len)*2-1
         self._weights /= linalg.norm(self._weights, axis=-1, keepdims=True)
 
         self._activation_map = zeros((x, y))
@@ -235,7 +239,7 @@ class MiniSom(object):
     def _activate(self, x):
         """Updates matrix activation_map, in this matrix
            the element i,j is the response of the neuron i,j to x."""
-        self._activation_map = self._activation_distance(x, self._weights)
+        self._activation_map = self._activation_distance(x, self._weights[:, :, :self._input_len])
 
     def activate(self, x):
         """Returns the activation map to x."""
@@ -290,7 +294,7 @@ class MiniSom(object):
 
     def _check_input_len(self, data):
         """Checks that the data in input is of the correct shape."""
-        data_len = len(data[0])
+        data_len = len(data[0, :self._input_len])
         if self._input_len != data_len:
             msg = 'Received %d features, expected %d.' % (data_len,
                                                           self._input_len)
@@ -298,7 +302,7 @@ class MiniSom(object):
 
     def winner(self, x):
         """Computes the coordinates of the winning neuron for the sample x."""
-        self._activate(x)
+        self._activate(x[:self._input_len])
         return unravel_index(self._activation_map.argmin(),
                              self._activation_map.shape)
 
@@ -321,8 +325,10 @@ class MiniSom(object):
         sig = self._decay_function(self._sigma, t, max_iteration)
         # improves the performances
         g = self.neighborhood(win, sig)*eta
-        # w_new = eta * neighborhood_function * (x-w)
-        self._weights += einsum('ij, ijk->ijk', g, x-self._weights)
+        # w_new = eta * neighborhood_function * (x-w) for the input part
+        self._weights[:, :, :self._input_len] += einsum('ij, ijk->ijk', g, x[:self._input_len]-self._weights[:, :, :self._input_len])
+        # w_new = eta * neighborhood_function * (x-w) for the output part
+        self._weights[:, :, self._output_len:] += einsum('ij, ijk->ijk', g, x[self._output_len:]-self._weights[:, :, self._output_len:])
 
     def quantization(self, data):
         """Assigns a code book (weights vector of the winning neuron)
@@ -746,3 +752,6 @@ class TestMinisom(unittest.TestCase):
         with open('som.p', 'rb') as infile:
             pickle.load(infile)
         os.remove('som.p')
+
+if __name__ == '__main__':
+    unittest.main()
